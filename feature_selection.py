@@ -5,6 +5,7 @@ from sklearn.feature_selection import RFE, SelectKBest, f_regression
 import pickle
 import os
 
+from config import K_BEST_FEATURES, N_RFE_FEATURES
 
 class FeatureSelector:
     def __init__(self):
@@ -20,7 +21,7 @@ class FeatureSelector:
         print(f"Total selected features: {len(self.selected_features)}")
         return list(self.selected_features)
 
-    def run(self, df, target_column, k_best=10, n_features_rfe=10):
+    def run(self, df, target_column, k_best=K_BEST_FEATURES, n_features_rfe=N_RFE_FEATURES):
         """
         Run all feature selection methods and return the final selected features.
         """
