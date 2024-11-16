@@ -1,86 +1,98 @@
 import pandas as pd
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler, OrdinalEncoder, OneHotEncoder
 from sklearn.impute import SimpleImputer
 import pickle as pkl
+import os
+
 
 class DatasetPipeline:
-    def __init__():
-        pass
+    def __init__(self):
+        self.preprocessor = None  # This will store the combined ColumnTransformer
 
-    def run(self, path, usable_columns, encoding_dict):
-        df = self.load_data(path, columns=usable_columns)
+    def run(self, path, dataset_name, target_col, encoding_dict, numerical_cols):
+        self.dataset_name = dataset_name
+        self.target_col = target_col
+
+        # Load the dataset
+        df = self.load_data(path)
+
+        # Drop duplicates and rows with excessive missing data
         df = self.drop_duplicates(df)
-        df = self.handle_missing_data(df)
-        df = self.encode_categorical_columns(df, encoding_dict=encoding_dict)
-        df = self.scale_numerical_columns(df)
-        return df
+        df = self.remove_missing_data(df)
 
-    def load_data(self, path, columns):
-        return pd.read_csv(path, engine='pyarrow')[columns]
+        # Identify column groups dynamically
+        categorical_columns = set(encoding_dict.get("One-Hot", []) + encoding_dict.get("Ordinal", []))
+        numerical_cols = numerical_cols or list(df.select_dtypes(include=["float64", "int64"]).columns.difference([target_col]))
+
+        # Build the preprocessing pipeline
+        self.create_preprocessing_pipeline(categorical_columns, encoding_dict, numerical_cols)
+
+        # Separate features and target
+        X = df.drop(columns=[target_col])
+        y = df[target_col]
+
+        # Apply transformations
+        X_transformed = self.preprocessor.fit_transform(X)
+
+        # Save the preprocessor
+        os.makedirs('pipelines', exist_ok=True)
+        with open(f'pipelines/{self.dataset_name}_pipeline.pkl', 'wb') as f:
+            pkl.dump(self.preprocessor, f, pkl.HIGHEST_PROTOCOL)
+
+        # Return the transformed features and target
+        df_transformed = pd.DataFrame(X_transformed)
+        df_transformed[target_col] = y
+
+        return df_transformed
+
+    def load_data(self, path):
+        return pd.read_csv(path, engine='pyarrow')
 
     def drop_duplicates(self, df):
+        """
+        Removes duplicate rows from the DataFrame.
+        """
         return df.drop_duplicates()
-    
-    def handle_missing_data(self, df, threshold = 0.2):
-        df = df.dropna(thresh=int(threshold * df.shape[1]))
 
-        # Separate columns by data type
-        num_cols = df.select_dtypes(include=['float64', 'int64']).columns
-        cat_cols = df.select_dtypes(include=['object']).columns
+    def remove_missing_data(self, df, threshold=0.2):
+        """
+        Removes rows with a high proportion of missing values.
+        """
+        return df.dropna(thresh=int(threshold * df.shape[1]))
 
-        # Impute numerical columns with median
-        num_imputer = SimpleImputer(strategy='median')
-        df[num_cols] = num_imputer.fit_transform(df[num_cols])
+    def create_preprocessing_pipeline(self, categorical_columns, encoding_dict, numerical_cols):
+        """
+        Create a combined ColumnTransformer for preprocessing.
+        """
+        # Preprocessing for numerical features
+        num_pipeline = Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scaler", StandardScaler())
+        ])
 
-        # Impute categorical columns with the most frequent category
-        cat_imputer = SimpleImputer(strategy='most_frequent')
-        df[cat_cols] = cat_imputer.fit_transform(df[cat_cols])
-
-        with open('num_imputer.pkl', 'wb') as f:
-            pkl.dump(num_imputer, f, pkl.HIGHEST_PROTOCOL)
-
-        with open('cat_imputer.pkl', 'wb') as f:
-            pkl.dump(cat_imputer, f, pkl.HIGHEST_PROTOCOL)
-
-        return df
-    
-    def encode_categorical_columns(self, df, encoding_dict):
-        # One encoder for all One-Hot columns, treating each column independently
+        # Preprocessing for one-hot encoded categorical features
         one_hot_columns = encoding_dict.get("One-Hot", [])
-        if one_hot_columns:
-            one_hot_encoder = OneHotEncoder(sparse=False, handle_unknown='ignore')
-            transformed_data = one_hot_encoder.fit_transform(df[one_hot_columns])
+        one_hot_pipeline = Pipeline([
+            ("imputer", SimpleImputer(strategy="most_frequent")),
+            ("onehot", OneHotEncoder(sparse_output=False, handle_unknown="ignore"))
+        ])
 
-            # Create a DataFrame for the one-hot encoded columns
-            one_hot_df = pd.DataFrame(transformed_data, columns=one_hot_encoder.get_feature_names_out(one_hot_columns))
-            df.drop(one_hot_columns, axis=1, inplace=True)  # Drop the original columns
-            df = pd.concat([df, one_hot_df], axis=1)  # Concatenate the one-hot encoded columns
-
-            # Save encoder
-            with open(f"encoders/one_hot_encoder.pkl", "wb") as f:
-                pkl.dump(one_hot_encoder, f)
-            print(f"Saved One-Hot Encoder for columns {one_hot_columns} as one_hot_encoder.pkl")
-
-        # One encoder for all Ordinal columns, treating each column independently
+        # Preprocessing for ordinal encoded categorical features
         ordinal_columns = encoding_dict.get("Ordinal", [])
+        ordinal_pipeline = Pipeline([
+            ("imputer", SimpleImputer(strategy="most_frequent")),
+            ("ordinal", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1))
+        ])
+
+        # Combine all preprocessing pipelines
+        transformers = []
+        if numerical_cols:
+            transformers.append(("num", num_pipeline, numerical_cols))
+        if one_hot_columns:
+            transformers.append(("onehot", one_hot_pipeline, one_hot_columns))
         if ordinal_columns:
-            ordinal_encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
-            df[ordinal_columns] = ordinal_encoder.fit_transform(df[ordinal_columns])
+            transformers.append(("ordinal", ordinal_pipeline, ordinal_columns))
 
-            # Save encoder
-            with open(f"encoders/ordinal_encoder.pkl", "wb") as f:
-                pkl.dump(ordinal_encoder, f)
-            print(f"Saved Ordinal Encoder for columns {ordinal_columns} as ordinal_encoder.pkl")
-
-        return df
-
-    def scale_numerical_columns(self, df):
-        # Identify numerical columns
-        num_cols = df.select_dtypes(include=['float64', 'int64']).columns
-        scaler = StandardScaler()
-        df[num_cols] = scaler.fit_transform(df[num_cols])
-
-        with open('scaler.pkl', 'wb') as f:
-            pkl.dump(scaler, f, pkl.HIGHEST_PROTOCOL)
-
-        return df
+        self.preprocessor = ColumnTransformer(transformers=transformers, remainder="drop")
