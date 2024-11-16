@@ -45,7 +45,7 @@ class DatasetPipeline:
         df_transformed = pd.DataFrame(X_transformed)
         df_transformed[target_col] = y
 
-        return df_transformed
+        return df_transformed.dropna()
 
     def load_data(self, path):
         return pd.read_csv(path, engine='pyarrow')

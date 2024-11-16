@@ -29,6 +29,7 @@ class FeatureSelector:
         self.target_column = target_column
         self.k_best = k_best
         self.n_features_rfe = n_features_rfe
+        self.selected_features = set()
 
         print("Running Tree-Based Feature Importance...")
         self.feature_importance_tree_based()
