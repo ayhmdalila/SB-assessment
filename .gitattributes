@@ -1,1 +1,2 @@
 *.csv filter=lfs diff=lfs merge=lfs -text
+feature_selectors/rf_feature_importance.pkl filter=lfs diff=lfs merge=lfs -text

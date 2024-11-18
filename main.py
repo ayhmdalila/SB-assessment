@@ -11,15 +11,11 @@ if __name__=='__main__':
                                                                                                                                                             'Ordinal': ['rooms_en']}, 
                                                                                                                                                             numerical_cols=['transaction_size_sqm', 'property_size_sqm',  'total_buyer', 'total_seller', 'building_age'])
 
-    print(transactions_dataset)
-    transactions_dataset.to_csv('result.csv', index=False)
 
     rents_dataset = pipeline.run(RENTS_DATASET_PATH, dataset_name='rents', target_col = 'annual_amount', encoding_dict = {'One-Hot': ['is_freehold_text', 'property_type_en', 'property_subtype_en', 'property_usage_en'],
                                                                                                                                                             'Ordinal': ['area_en', 'master_project_en']}, 
                                                                                                                                                             numerical_cols=['property_size_sqm', 'total_properties', 'rooms'])
 
-    print(transactions_dataset)
-    rents_dataset.to_csv('result_rents.csv', index=False)
 
     fs = FeatureSelector()
 
