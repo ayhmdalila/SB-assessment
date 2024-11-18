@@ -28,8 +28,8 @@ class ModelPipeline:
                 RandomForestRegressor,
                 {
                     "param_bounds": {
-                        "n_estimators": (10, 50),
-                        "max_depth": (3, 10)
+                        "n_estimators": (5, 25),
+                        "max_depth": (2, 5)
                     },
                     "param_transformers": {
                         "n_estimators": int,
@@ -43,8 +43,8 @@ class ModelPipeline:
                 XGBRegressor,
                 {
                     "param_bounds": {
-                        "n_estimators": (10, 50),
-                        "max_depth": (3, 10),
+                        "n_estimators": (5, 25),
+                        "max_depth": (2, 5),
                         "learning_rate": (0.01, 0.3),
                     },
                     "param_transformers": {
@@ -59,10 +59,11 @@ class ModelPipeline:
                 SVR,
                 {
                     "param_bounds": {
-                        "C": (0.1, 100),
-                        "epsilon": (0.01, 1),
+                        "C": (0.1, 10),
+                        "epsilon": (0.01, 0.5),
                     },
-                    "model_name": "svr.pkl",
+                    "kernel": "linear",  # Just for speed
+                    "model_name": "svr.pkl"
                 },
             ),
         }
@@ -88,6 +89,7 @@ class ModelPipeline:
                 self.models[model_name] = self.optimize_model(model_class, **params)
 
         return self.models
+
 
     def optimize_model(self, model_class, param_bounds, param_transformers=None, model_name=None, prefix=None, **fixed_params):
         """
